@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initiaal-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>IMAN // SYSTEM_BREACH_V11</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Source+Code+Pro:wght@300;500;700&display=swap');
+
+        :root {
+            --nier-bg: #d1cfb3;
+            --nier-dark: #454138;
+            --neon-white: #ffffff;
+            --accent: #00ffcc; 
+            --danger: #ff0055;
+            --missile: #ffaa00;
+            --health: #00ff66;
+            --upgrade: #ffff00;
+        }
+
+        * { box-sizing: border-box; touch-action: none; }
+
+        body {
+            margin: 0;
+            background: #030303;
+            color: var(--neon-white);
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            cursor: none;
+        }
+
+        /* Scanline Overlay */
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(255, 255, 255, 0.02) 0px,
+                rgba(255, 255, 255, 0.02) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            pointer-events: none;
+            z-index: 5000;
+        }
+
+        canvas { display: block; }
+
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--nier-bg);
+            color: var(--nier-dark);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Source Code Pro', monospace;
+            padding: 40px;
+        }
+
+        .load-content { width: 100%; max-width: 500px; text-align: center; }
+        .load-bar-wrap { width: 100%; height: 1px; background: rgba(69, 65, 56, 0.2); margin: 25px 0; position: relative; }
+        #load-bar-fill { position: absolute; left: 0; top: -1px; height: 3px; background: var(--nier-dark); width: 0%; transition: width 0.1s; }
+        .load-text { font-size: 13px; letter-spacing: 1px; margin-bottom: 5px; font-weight: 500; }
+
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 30px 40px;
+            z-index: 500;
+        }
+
+        #ui-top { display: flex; justify-content: space-between; pointer-events: auto; }
+
+        /* Dev Panel */
+        #devPanel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 10, 0.98);
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 20px 25px;
+            display: none;
+            font-size: 11px;
+            pointer-events: auto;
+            z-index: 6000;
+            width: 440px;
+            max-height: 95vh;
+            overflow-y: auto;
+            box-shadow: 0 0 100px rgba(0,0,0,1);
+        }
+
+        #devPanel::-webkit-scrollbar { width: 4px; }
+        #devPanel::-webkit-scrollbar-thumb { background: #333; }
+        #devPanel h3 { margin: 0 0 10px 0; font-size: 13px; border-bottom: 1px solid #333; padding-bottom: 8px; color: var(--accent); letter-spacing: 2px; }
+        
+        .dev-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .dev-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .dev-field { margin-bottom: 2px; }
+        #devPanel label { display: block; margin-bottom: 4px; opacity: 0.5; font-size: 8px; letter-spacing: 1px; text-transform: uppercase; }
+        #devPanel input { width: 100%; background: #000; color: #fff; border: 1px solid #333; padding: 6px; font-family: inherit; outline: none; font-size:10px; }
+        #devPanel input:focus { border-color: var(--accent); }
+        .wpn-header { margin: 12px 0 5px; font-size: 10px; border-bottom: 1px dashed #333; padding-bottom: 4px; letter-spacing: 1px;}
+
+        #ui-bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+        .stat-group { width: 320px; text-align: left; }
+        .stat-label { font-size: 10px; margin-bottom: 8px; opacity: 0.7; letter-spacing: 1px; }
+        .bar-outer { width: 100%; height: 3px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); position: relative; }
+        .bar-fill { height: 100%; background: white; width: 100%; transition: width 0.25s; box-shadow: 0 0 8px white; }
+        #energy-fill { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+        #pause-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; z-index: 4000; pointer-events: none; }
+        
+        #game-over { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; 
+            flex-direction: column; align-items: center; justify-content: center; 
+            z-index: 5500; pointer-events: auto;
+        }
+
+        .glitch-text { font-size: 28px; font-weight: bold; letter-spacing: 8px; color: var(--danger); text-transform: uppercase; }
+        
+        .btn {
+            background: none; border: 1px solid white; color: white;
+            padding: 12px 30px; font-family: inherit; cursor: pointer;
+            margin-top: 20px; transition: 0.3s; font-size: 12px; text-transform: uppercase;
+        }
+        .btn:hover { background: white; color: black; box-shadow: 0 0 20px white; }
+
+        #alert-box {
+            position: fixed; top: 25%; left: 50%; transform: translateX(-50%);
+            color: var(--accent); font-size: 16px; font-weight: bold;
+            pointer-events: none; opacity: 0; transition: 0.3s; z-index: 1000;
+            text-align: center; text-transform: uppercase; letter-spacing: 2px;
+            text-shadow: 0 0 10px currentColor;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading-screen">
+    <div class="load-content">
+        <div class="load-text" id="load-msg">CONNECTING TO SYSTEM...</div>
+        <div class="load-bar-wrap"><div id="load-bar-fill"></div></div>
+        <div class="load-text" style="opacity: 0.4; font-size: 10px;">NieR_CORE v11.0 // SECURE_CHANNEL</div>
+    </div>
+</div>
+
+<div id="alert-box">WEAPON UPGRADED</div>
+
+<div id="ui-layer">
+    <div id="ui-top">
+        <div id="score-text" style="font-size: 12px; letter-spacing: 2px;">LOGS: 000000</div>
+        <div id="phase-display" style="font-size: 12px; letter-spacing: 1px;">PHASE 01: READY</div>
+        <div style="cursor: pointer; pointer-events: auto; font-size: 11px; opacity: 0.6;" onclick="togglePause()">[ ESC : SETTINGS ]</div>
+    </div>
+
+    <!-- Dev Panel -->
+    <div id="devPanel">
+        <h3>ROOT_ACCESS_TERMINAL</h3>
+        
+        <div class="dev-grid-2">
+            <div class="dev-field"><label>Spawn Interval (ms)</label><input id="spawnRate" type="number" value="1200"></div>
+            <div class="dev-field"><label>Enemy Speed Mult</label><input id="enemySpeed" type="number" step="0.1" value="3.5"></div>
+            <div class="dev-field"><label>Phase Duration (ms)</label><input id="phaseDur" type="number" value="20000"></div>
+            <div class="dev-field"><label>Hitbox Radius</label><input id="hitboxRad" type="number" value="4"></div>
+            <div class="dev-field"><label>Energy Regen Rate</label><input id="energyRegen" type="number" step="0.1" value="0.8"></div>
+        </div>
+
+        <!-- Weapon Specific Settings -->
+        <h4 class="wpn-header" style="color: var(--neon-white);">DEFAULT BLASTER</h4>
+        <div class="dev-grid">
+            <div class="dev-field"><label>Damage</label><input id="defDmg" type="number" value="14"></div>
+            <div class="dev-field"><label>Energy Cost</label><input id="defEnrg" type="number" step="0.1" value="2.5"></div>
+            <div class="dev-field"><label>Fire Rate (ms)</label><input id="defRate" type="number" value="100"></div>
+        </div>
+
+        <h4 class="wpn-header" style="color: var(--missile);">HEAVY MISSILE (Straight & AoE)</h4>
+        <div class="dev-grid">
+            <div class="dev-field"><label>Damage</label><input id="misDmg" type="number" value="60"></div>
+            <div class="dev-field"><label>Energy Cost</label><input id="misEnrg" type="number" step="0.1" value="5.0"></div>
+            <div class="dev-field"><label>Fire Rate (ms)</label><input id="misRate" type="number" value="500"></div>
+        </div>
+
+        <h4 class="wpn-header" style="color: var(--accent);">PHOTON LASER (Chain Effect)</h4>
+        <div class="dev-grid">
+            <div class="dev-field"><label>Dmg (per sec)</label><input id="lasDmg" type="number" value="250"></div>
+            <div class="dev-field"><label>Energy (per frame)</label><input id="lasEnrg" type="number" step="0.01" value="0.15"></div>
+            <div class="dev-field"><label>Fire Rate</label><input type="text" value="Continuous" disabled style="opacity:0.5;"></div>
+        </div>
+        
+        <!-- Weapon Testing Tools -->
+        <div style="margin-top:15px; text-align:center; border-top:1px solid #333; padding-top:10px;">
+            <label style="opacity:0.5; font-size:9px; letter-spacing:1px; display:block; margin-bottom:5px;">TEST WEAPONS (INSTANT EQUIP)</label>
+            <div style="display:flex; justify-content:space-between;">
+                <button class="btn" style="margin:0; padding:6px 12px; font-size:10px;" onclick="testWeapon('DEFAULT')">DEF</button>
+                <button class="btn" style="margin:0; padding:6px 12px; font-size:10px;" onclick="testWeapon('MISSILE')">MISS</button>
+                <button class="btn" style="margin:0; padding:6px 12px; font-size:10px;" onclick="testWeapon('LASER')">LASR</button>
+                <button class="btn" style="margin:0; padding:6px 12px; font-size:10px; color:var(--upgrade); border-color:var(--upgrade);" onclick="testWeapon('UPGRADE')">+ LVL</button>
+            </div>
+        </div>
+
+        <button onclick="applySettings()" class="btn" style="width:100%; margin-top:15px;">COMMIT_CHANGES</button>
+    </div>
+
+    <div id="ui-bottom">
+        <div class="stat-group">
+            <div class="stat-label">INTEGRITY</div>
+            <div class="bar-outer"><div class="bar-fill" id="hp-fill"></div></div>
+        </div>
+        <div class="stat-group">
+            <div class="stat-label">ENERGY [LVL <span id="weapon-lvl-display">1</span> <span id="weapon-type-display">DEFAULT</span>]</div>
+            <div class="bar-outer"><div class="bar-fill" id="energy-fill"></div></div>
+        </div>
+    </div>
+</div>
+
+<div id="pause-overlay"></div>
+
+<div id="game-over">
+    <div class="glitch-text">ACCESS DENIED</div>
+    <div style="margin-top: 15px; font-size: 14px; opacity: 0.7; color: white;">FAILED AT PHASE: <span id="final-phase">0</span></div>
+    <button class="btn" onclick="resetGame()">REBOOT SYSTEM</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+// Hardware Color Constants
+const C_DANGER = "#ff0055";
+const C_ACCENT = "#00ffcc";
+const C_MISSILE = "#ffaa00";
+const C_HEALTH = "#00ff66";
+const C_WHITE = "#ffffff";
+const C_UPGRADE = "#ffff00";
+
+/**
+ * Web Audio API Sound System
+ */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+const sfx = {
+    bgmPlaying: false,
+    bgmInterval: null,
+    playTone: function(freq, type, duration, vol=0.1) {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    },
+    playNoise: function(duration, vol=0.2) {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1000;
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    },
+    startBGM: function() {
+        if(this.bgmPlaying) return;
+        this.bgmPlaying = true;
+        const notes = [45, 45, 55, 45, 60, 45, 55, 40]; // Cyberpunk bassline
+        let step = 0;
+        this.bgmInterval = setInterval(() => {
+            if(!state.paused && state.running) {
+                this.playTone(notes[step % notes.length], 'sawtooth', 0.2, 0.04);
+                step++;
+            }
+        }, 220);
+    },
+    shootDef: () => sfx.playTone(800, 'square', 0.1, 0.02),
+    shootMis: () => sfx.playNoise(0.2, 0.06),
+    enemyHit: () => sfx.playTone(300, 'sawtooth', 0.1, 0.05),
+    enemyDie: () => sfx.playNoise(0.2, 0.1),
+    bossShoot: () => sfx.playTone(150, 'square', 0.2, 0.08),
+    bossDie: () => { sfx.playNoise(1.5, 0.4); sfx.playTone(50, 'sawtooth', 1.5, 0.3); },
+    playerHit: () => { sfx.playNoise(0.5, 0.4); sfx.playTone(100, 'triangle', 0.5, 0.4); },
+    pickupItem: () => { sfx.playTone(600, 'sine', 0.1, 0.1); setTimeout(()=>sfx.playTone(900, 'sine', 0.2, 0.1), 100); },
+    upgrade: () => { sfx.playTone(400, 'square', 0.1, 0.1); setTimeout(()=>sfx.playTone(600, 'square', 0.1, 0.1), 100); setTimeout(()=>sfx.playTone(800, 'square', 0.3, 0.1), 200); },
+    explosion: () => { sfx.playNoise(0.5, 0.5); sfx.playTone(80, 'square', 0.5, 0.2); }
+};
+
+window.addEventListener('mousedown', () => { 
+    if(audioCtx.state === 'suspended') audioCtx.resume(); 
+    sfx.startBGM(); 
+}, {once: true});
+
+// -------------------------------------------------------------------
+// Game State & Configuration
+// -------------------------------------------------------------------
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let weaponStats = {
+    DEFAULT: { energy: 2.5, damage: 14, fireRate: 100 },
+    MISSILE: { energy: 5.0, damage: 60, fireRate: 500 },
+    LASER:   { energy: 0.15, damage: 250, fireRate: 0 } // energy per frame, dmg per second
+};
+
+let state = {
+    running: false, paused: false, hp: 100, energy: 100, score: 0, phase: 1,
+    lastPhaseUpdate: Date.now(), shake: 0, isFiring: false, playerAngle: 0,
+    weaponType: 'DEFAULT', // DEFAULT, MISSILE, LASER
+    weaponLevel: 1,
+    laserActive: false,
+    activeChains: [] // used for drawing laser connections
+};
+
+let config = {
+    spawnInterval: 1200, enemyBulletSpeed: 3.5, phaseDuration: 20000,
+    energyRegen: 0.8
+};
+
+let player = { x: 0, y: 0, targetX: 0, targetY: 0, vx: 0, vy: 0, r: 12, colR: 4 };
+let bullets = [], enemyBullets = [], enemies = [], particles = [], items = [], explosions = [];
+let lastShot = 0, lastSpawn = 0;
+
+const codeSnippets = [
+    "segment.fault", "0x00FF12", "alloc.mem()", "cpu.lock",
+    "sudo kill -9", "node.crash", "null.pointer", "overflow()",
+    "stack.pop()", "heap.leak", "sync.fail", "db.corrupt", "0xDEADBEEF"
+];
+
+const bossNames = ["CORE-ALPHA", "PROTOCOL-DESTROYER", "DATA-WORM", "CYBER-GHOST", "OMEGA-VIRUS", "NET-GUARDIAN"];
+const msgs = ["Bypassing Logic...", "Injecting Payloads...", "Access Granted."];
+
+// -------------------------------------------------------------------
+// Core Functions
+// -------------------------------------------------------------------
+function startLoading() {
+    const bar = document.getElementById("load-bar-fill");
+    const txt = document.getElementById("load-msg");
+    let progress = 0;
+    
+    const interval = setInterval(() => {
+        progress += Math.random() * 8;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            setTimeout(() => {
+                document.getElementById("loading-screen").style.opacity = "0";
+                setTimeout(() => {
+                    document.getElementById("loading-screen").style.display = "none";
+                    state.running = true;
+                    init();
+                }, 400);
+            }, 500);
+        }
+        bar.style.width = progress + "%";
+        txt.innerText = msgs[Math.floor((progress/100) * msgs.length)] || "Entering...";
+    }, 60);
+}
+
+function init() {
+    resize();
+    player.x = canvas.width / 2; player.y = canvas.height * 0.85;
+    player.targetX = player.x; player.targetY = player.y;
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', e => { player.targetX = e.clientX; player.targetY = e.clientY; });
+    window.addEventListener('mousedown', () => state.isFiring = true);
+    window.addEventListener('mouseup', () => state.isFiring = false);
+    window.addEventListener('keydown', e => { if(e.key === "Escape") togglePause(); });
+
+    requestAnimationFrame(loop);
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+function showAlert(text, color) {
+    const alert = document.getElementById("alert-box");
+    alert.innerText = text;
+    alert.style.color = color || C_ACCENT;
+    alert.style.opacity = "1";
+    setTimeout(() => alert.style.opacity = "0", 2000);
+}
+
+// Dev Menu Testing Tool
+function testWeapon(type) {
+    if(type === 'UPGRADE') {
+        if(state.weaponLevel < 5) {
+            state.weaponLevel++;
+            sfx.upgrade();
+        }
+    } else {
+        state.weaponType = type;
+        sfx.pickupItem();
+    }
+    document.getElementById("weapon-type-display").innerText = state.weaponType;
+    document.getElementById("weapon-lvl-display").innerText = state.weaponLevel;
+}
+
+function handleEnemyDeath(e) {
+    if(e.dead) return; 
+    e.dead = true;
+    state.score += (e.type === 'BOSS' ? 5000 : 250);
+    createParticles(e.x, e.y, e.type === 'BOSS' ? C_DANGER : C_WHITE, e.type === 'BOSS' ? 50 : 20);
+    
+    if(e.type === 'BOSS') {
+        sfx.bossDie();
+        state.shake = 25;
+        spawnItem(e.x, e.y, true); 
+        config.spawnInterval = Math.max(150, config.spawnInterval * 0.85); 
+    } else {
+        sfx.enemyDie();
+        state.shake = 6;
+        if(Math.random() < 0.15) spawnItem(e.x, e.y, false); 
+    }
+}
+
+function processLaser() {
+    if (!state.isFiring || state.weaponType !== 'LASER' || state.energy <= 0) {
+        state.laserActive = false;
+        return;
+    }
+    
+    state.laserActive = true;
+    state.energy -= weaponStats.LASER.energy;
+    if(state.energy <= 0) { state.laserActive = false; return; }
+    
+    if(Math.random() < 0.2) sfx.playTone(1200, 'sawtooth', 0.05, 0.02);
+
+    let angles = [0];
+    if(state.weaponLevel === 2) angles = [-0.1, 0.1];
+    else if(state.weaponLevel === 3) angles = [0, -0.15, 0.15];
+    else if(state.weaponLevel === 4) angles = [-0.1, 0.1, -0.25, 0.25];
+    else if(state.weaponLevel === 5) angles = [0, -0.12, 0.12, -0.25, 0.25];
+
+    const baseAng = -Math.PI/2; 
+    const dmgPerFrame = weaponStats.LASER.damage * (16.6/1000);
+
+    angles.forEach(ang => {
+        const actualAng = baseAng + ang;
+        const Lx = Math.cos(actualAng);
+        const Ly = Math.sin(actualAng);
+        
+        enemies.forEach(e => {
+            if(e.dead) return;
+            const Ex = e.x - player.x;
+            const Ey = e.y - (player.y - 15);
+            const dot = Ex*Lx + Ey*Ly;
+            
+            if (dot > 0) { 
+                const projX = player.x + dot*Lx;
+                const projY = (player.y - 15) + dot*Ly;
+                const dist = Math.hypot(e.x - projX, e.y - projY);
+                const hitRadius = e.type === 'BOSS' ? e.width/2 : 25;
+                
+                if (dist < hitRadius) {
+                    e.hp -= dmgPerFrame; 
+                    if(Math.random() < 0.3) createParticles(projX, projY, C_ACCENT, 1);
+                    
+                    // Chain Laser Effect (AoE chaining)
+                    const chainRadius = 150;
+                    enemies.forEach(neighbor => {
+                        if(neighbor !== e && !neighbor.dead) {
+                            if(Math.hypot(neighbor.x - e.x, neighbor.y - e.y) < chainRadius) {
+                                neighbor.hp -= dmgPerFrame * 0.5; // 50% damage to chained enemies
+                                state.activeChains.push({x1: e.x, y1: e.y, x2: neighbor.x, y2: neighbor.y});
+                                if (neighbor.hp <= 0) handleEnemyDeath(neighbor);
+                            }
+                        }
+                    });
+
+                    if (e.hp <= 0) handleEnemyDeath(e);
+                }
+            }
+        });
+    });
+}
+
+function update(dt) {
+    if (!state.running || state.paused) return;
+
+    state.activeChains = []; // Clear previous laser chains
+
+    // Movement
+    const dx = player.targetX - player.x;
+    const dy = player.targetY - player.y;
+    player.vx = dx * 0.35; player.vy = dy * 0.35;
+    player.x += player.vx; player.y += player.vy;
+    state.playerAngle = Math.max(-0.4, Math.min(0.4, player.vx * 0.025));
+
+    if (state.shake > 0) state.shake -= 0.8;
+
+    // Phase progression
+    if (Date.now() - state.lastPhaseUpdate > config.phaseDuration) {
+        state.phase++;
+        state.lastPhaseUpdate = Date.now();
+        config.enemyBulletSpeed += 0.3;
+        config.spawnInterval = Math.max(250, config.spawnInterval - 80);
+        showAlert(`PHASE ${state.phase} REACHED`, C_WHITE);
+    }
+
+    // Weapons Logic
+    if (state.weaponType === 'LASER') {
+        processLaser();
+    } else {
+        state.laserActive = false;
+        
+        let wStats = weaponStats[state.weaponType];
+        if (state.isFiring && Date.now() - lastShot > wStats.fireRate && state.energy > wStats.energy) {
+            shoot();
+            lastShot = Date.now();
+            state.energy -= wStats.energy;
+        }
+    }
+    
+    // Regen energy if not firing
+    if (!state.isFiring && state.energy < 100) state.energy += config.energyRegen;
+
+    // Spawning (Only if no Boss)
+    const isBossAlive = enemies.some(e => e.type === 'BOSS' && !e.dead);
+    if (Date.now() - lastSpawn > config.spawnInterval && !isBossAlive) {
+        spawnEnemy();
+        lastSpawn = Date.now();
+    }
+
+    // Items Logic
+    items.forEach(item => {
+        if(item.dead) return;
+        item.y += item.vy;
+        
+        if (Math.hypot(item.x - player.x, item.y - player.y) < player.r + 15) {
+            sfx.pickupItem();
+            createParticles(item.x, item.y, item.color, 15);
+            
+            if (item.type === 'HEALTH') {
+                state.hp = Math.min(100, state.hp + 30);
+                showAlert("INTEGRITY RESTORED", C_HEALTH);
+            } else if (item.type === 'W_DEFAULT') {
+                state.weaponType = 'DEFAULT';
+                showAlert("DEFAULT BLASTER EQUIPPED", C_WHITE);
+            } else if (item.type === 'W_MISSILE') {
+                state.weaponType = 'MISSILE';
+                showAlert("HEAVY MISSILE EQUIPPED", C_MISSILE);
+            } else if (item.type === 'W_LASER') {
+                state.weaponType = 'LASER';
+                showAlert("PHOTON LASER EQUIPPED", C_ACCENT);
+            } else if (item.type === 'W_UPGRADE') {
+                if(state.weaponLevel < 5) {
+                    state.weaponLevel++;
+                    sfx.upgrade();
+                    showAlert(`WEAPON UPGRADED TO LVL ${state.weaponLevel}`, C_UPGRADE);
+                } else {
+                    state.score += 1000;
+                    showAlert("MAX LEVEL! +1000 LOGS", C_UPGRADE);
+                }
+            }
+            item.dead = true;
+        } else if (item.y > canvas.height + 50) {
+            item.dead = true;
+        }
+    });
+
+    // Player Bullets Logic (Default & Missile)
+    bullets.forEach(b => {
+        if(b.dead) return;
+        
+        if (b.type === 'MISSILE') {
+            // Straight forward movement (homing removed as requested)
+            if(Math.random() < 0.6) createParticles(b.x, b.y, C_MISSILE, 1);
+            b.x += b.vx;
+            b.y += b.vy;
+        } else {
+            // Default Bullet
+            b.y -= 25;
+        }
+
+        if (b.y < -150 || b.x < -100 || b.x > canvas.width + 100) {
+            b.dead = true;
+        }
+    });
+
+    // Enemies Logic
+    enemies.forEach(e => {
+        if(e.dead) return;
+        
+        // Horizontal Movement Logic
+        if (e.isMoving) {
+            if (e.y >= e.targetY - 5) { // When reached battle line
+                e.x += e.moveDir * e.moveSpeed;
+                if (e.x < 50 || e.x > canvas.width - 50) e.moveDir *= -1;
+            }
+        }
+        
+        e.y += (e.targetY - e.y) * 0.025; 
+        e.shootTimer += dt;
+        
+        if (e.shootTimer > e.shootFreq) {
+            if (e.type === 'BOSS') e.pattern = Math.floor(Math.random() * 3);
+            enemyShoot(e);
+            e.shootTimer = 0;
+        }
+
+        // Bullet Hit Detection
+        bullets.forEach(b => {
+            if(b.dead) return;
+            let isHit = false;
+            
+            if (e.type === 'BOSS' && e.width) {
+                const bossLeft = e.x - e.width / 2;
+                const bossRight = e.x + e.width / 2;
+                const bossTop = e.y - e.height + 4;
+                const bossBottom = e.y + 4;
+                
+                if (b.x > bossLeft && b.x < bossRight && b.y > bossTop && b.y < bossBottom) {
+                    isHit = true;
+                }
+            } else {
+                if (Math.hypot(b.x - e.x, b.y - e.y) < 40) isHit = true;
+            }
+
+            if (isHit) {
+                b.dead = true;
+                if (b.type === 'MISSILE') {
+                    // Explosion AoE
+                    explosions.push({ x: b.x, y: b.y, r: 0, maxR: 120, life: 1.0 });
+                    sfx.explosion();
+                    state.shake = 8;
+                    // Damage all enemies in radius
+                    enemies.forEach(aoeTarg => {
+                        if(aoeTarg.dead) return;
+                        if (Math.hypot(aoeTarg.x - b.x, aoeTarg.y - b.y) < 120) {
+                            aoeTarg.hp -= b.dmg; 
+                            if (aoeTarg.hp <= 0) handleEnemyDeath(aoeTarg);
+                        }
+                    });
+                } else {
+                    // Default bullet hit
+                    e.hp -= b.dmg;
+                    createParticles(b.x, b.y, C_WHITE, 2);
+                    sfx.enemyHit();
+                    if (e.hp <= 0) handleEnemyDeath(e);
+                }
+            }
+        });
+    });
+
+    // Explosions Logic
+    explosions.forEach(exp => {
+        exp.r += (exp.maxR - exp.r) * 0.2;
+        exp.life -= 0.05;
+        if (exp.life <= 0) exp.dead = true;
+    });
+
+    // Enemy Bullets Logic
+    enemyBullets.forEach(eb => {
+        if(eb.dead) return;
+        eb.x += eb.vx; eb.y += eb.vy;
+
+        // Player Collision
+        if (Math.hypot(eb.x - player.x, eb.y - (player.y + 10)) < player.colR + eb.r) {
+            state.hp -= eb.damage;
+            state.shake = 22;
+            sfx.playerHit();
+            eb.dead = true;
+            createParticles(player.x, player.y, C_DANGER, 15);
+            if (state.hp <= 0) gameOver();
+            return;
+        }
+
+        // Neutralize white bullets with player DEFAULT bullets
+        if (eb.type === 'white') {
+            bullets.forEach(pb => {
+                if(pb.dead) return;
+                if (pb.type === 'DEFAULT' && Math.hypot(pb.x - eb.x, pb.y - eb.y) < eb.r + 15) {
+                    eb.dead = true;
+                    pb.dead = true;
+                    createParticles(eb.x, eb.y, C_WHITE, 4);
+                }
+            });
+        }
+
+        if (eb.y > canvas.height + 150 || eb.y < -150 || eb.x < -150 || eb.x > canvas.width + 150) {
+            eb.dead = true;
+        }
+    });
+
+    // Particles
+    particles.forEach(p => {
+        p.x += p.dx; p.y += p.dy; p.life -= 0.035;
+        if (p.life <= 0) p.dead = true;
+    });
+
+    // Clean up dead entities
+    bullets = bullets.filter(b => !b.dead);
+    enemyBullets = enemyBullets.filter(eb => !eb.dead);
+    enemies = enemies.filter(e => !e.dead);
+    particles = particles.filter(p => !p.dead);
+    items = items.filter(i => !i.dead);
+    explosions = explosions.filter(exp => !exp.dead);
+
+    // UI Updates
+    document.getElementById("hp-fill").style.width = Math.max(0, state.hp) + "%";
+    document.getElementById("hp-fill").style.backgroundColor = state.hp < 30 ? C_DANGER : C_WHITE;
+    document.getElementById("energy-fill").style.width = Math.max(0, state.energy) + "%";
+    document.getElementById("score-text").innerText = `LOGS: ${Math.floor(state.score).toString().padStart(6, '0')}`;
+    document.getElementById("phase-display").innerText = `PHASE ${state.phase.toString().padStart(2, '0')}: ${state.phase % 3 === 0 ? 'CRITICAL CORE' : 'INFILTRATING'}`;
+    document.getElementById("weapon-lvl-display").innerText = state.weaponLevel;
+    document.getElementById("weapon-type-display").innerText = state.weaponType;
+}
+
+function spawnItem(x, y, forceDrop) {
+    const r = Math.random();
+    let type = 'HEALTH', color = C_HEALTH, label = '[+]';
+    
+    if (r < 0.20) { type = 'W_UPGRADE'; color = C_UPGRADE; label = '[UP]'; }
+    else if (r < 0.35) { type = 'W_LASER'; color = C_ACCENT; label = '[L]'; }
+    else if (r < 0.50) { type = 'W_MISSILE'; color = C_MISSILE; label = '[M]'; }
+    else if (r < 0.65) { type = 'W_DEFAULT'; color = C_WHITE; label = '[D]'; }
+    
+    items.push({ x, y, type, color, label, vy: 2.5, dead: false });
+}
+
+function shoot() {
+    let sType = state.weaponType;
+    const count = state.weaponLevel;
+    let wStats = weaponStats[sType];
+    
+    if (sType === 'DEFAULT') {
+        sfx.shootDef();
+        const spread = 12;
+        for (let i = 0; i < count; i++) {
+            const offset = (i - (count - 1) / 2) * spread;
+            bullets.push({ x: player.x + offset, y: player.y - 25, w: 8, h: 30, dmg: wStats.damage, color: C_WHITE, type: 'DEFAULT', dead: false });
+        }
+    } else if (sType === 'MISSILE') {
+        sfx.shootMis();
+        const spread = 0.2; // tighter angle
+        const baseAng = -Math.PI/2;
+        for (let i = 0; i < count; i++) {
+            const ang = baseAng + (i - (count - 1) / 2) * spread;
+            bullets.push({
+                x: player.x, y: player.y - 20,
+                vx: Math.cos(ang) * 12, vy: Math.sin(ang) * 12, // Faster, straight line movement
+                w: 12, h: 20, dmg: wStats.damage, color: C_MISSILE, type: 'MISSILE', angle: ang, dead: false
+            });
+        }
+    }
+}
+
+function enemyShoot(e) {
+    const isB = e.type === 'BOSS';
+    if(isB) sfx.bossShoot();
+    
+    const count = isB ? 24 : 10;
+    const bulletSpeed = config.enemyBulletSpeed * (isB ? 1.3 : 1);
+    const rad = isB ? 5 : 7; 
+
+    switch(e.pattern) {
+        case 0: // Ring
+            for (let i = 0; i < count; i++) {
+                let ang = (Math.PI * 2 / count) * i + (isB ? Math.sin(Date.now()*0.002) : 0);
+                addBullet(e.x, e.y, ang, bulletSpeed, rad, isB);
+            }
+            break;
+        case 1: // Targeted
+            let targetAng = Math.atan2(player.y - e.y, player.x - e.x);
+            for (let i = -2; i <= 2; i++) {
+                addBullet(e.x, e.y, targetAng + i * 0.15, bulletSpeed * 1.6, rad, isB);
+            }
+            break;
+        case 2: // Spiral
+            e.spiralAng = (e.spiralAng || 0) + 0.4;
+            for(let i=0; i< (isB ? 6 : 4); i++) {
+                addBullet(e.x, e.y, e.spiralAng + (Math.PI*2/(isB?6:4))*i, bulletSpeed, rad, isB);
+            }
+            break;
+    }
+}
+
+function addBullet(x, y, ang, spd, r, isBoss) {
+    enemyBullets.push({
+        x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+        r, type: isBoss || Math.random() > 0.85 ? 'red' : 'white',
+        damage: isBoss ? 20 : 12, dead: false
+    });
+}
+
+function spawnEnemy() {
+    const isB = state.phase % 3 === 0;
+    const targetY = isB ? 140 : (Math.random() * 140 + 60); 
+    
+    const nameText = isB ? bossNames[Math.floor(Math.random() * bossNames.length)] : codeSnippets[Math.floor(Math.random() * codeSnippets.length)];
+    
+    ctx.font = isB ? 'bold 22px Source Code Pro' : 'bold 15px Source Code Pro';
+    const textW = ctx.measureText(nameText).width;
+
+    const isMoving = !isB && Math.random() < 0.3;
+
+    enemies.push({
+        x: Math.random() * (canvas.width - 200) + 100,
+        y: -120, targetY: targetY,
+        text: nameText,
+        hp: (isB ? 1000 : 50) * (1 + state.phase * 0.2), 
+        maxHp: (isB ? 1000 : 50) * (1 + state.phase * 0.2),
+        type: isB ? 'BOSS' : 'NORMAL',
+        shootTimer: 0,
+        shootFreq: isB ? 1300 : 1800,
+        pattern: Math.floor(Math.random() * 3),
+        width: textW + 20, 
+        height: isB ? 26 : 18,
+        isMoving: isMoving,
+        moveDir: Math.random() < 0.5 ? 1 : -1,
+        moveSpeed: Math.random() * 2 + 1,
+        dead: false
+    });
+}
+
+function createParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x, y, color, life: 1.0,
+            dx: (Math.random() - 0.5) * 14,
+            dy: (Math.random() - 0.5) * 14,
+            dead: false
+        });
+    }
+}
+
+function draw() {
+    ctx.save();
+    if (state.shake > 0) ctx.translate(Math.random()*state.shake - state.shake/2, Math.random()*state.shake - state.shake/2);
+    
+    ctx.fillStyle = "#030303";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grid
+    ctx.strokeStyle = "rgba(0, 255, 204, 0.04)";
+    for (let i = 0; i < canvas.width; i += 80) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+    }
+    const offset = (Date.now()/35)%80;
+    for (let i = offset; i < canvas.height; i += 80) {
+        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+    }
+
+    // Laser Connections (Chain Effect)
+    state.activeChains.forEach(chain => {
+        ctx.beginPath();
+        ctx.moveTo(chain.x1, chain.y1);
+        ctx.lineTo(chain.x2, chain.y2);
+        ctx.strokeStyle = C_ACCENT;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = C_ACCENT;
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(chain.x1, chain.y1);
+        ctx.lineTo(chain.x2, chain.y2);
+        ctx.strokeStyle = C_WHITE;
+        ctx.lineWidth = 1;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+    });
+
+    // Continuous Laser rendering
+    if (state.laserActive) {
+        let angles = [0];
+        if(state.weaponLevel === 2) angles = [-0.1, 0.1];
+        else if(state.weaponLevel === 3) angles = [0, -0.15, 0.15];
+        else if(state.weaponLevel === 4) angles = [-0.1, 0.1, -0.25, 0.25];
+        else if(state.weaponLevel === 5) angles = [0, -0.12, 0.12, -0.25, 0.25];
+        
+        angles.forEach(ang => {
+            ctx.save();
+            ctx.translate(player.x, player.y - 15);
+            ctx.rotate(ang);
+            ctx.shadowBlur = 20; ctx.shadowColor = C_ACCENT;
+            ctx.fillStyle = C_ACCENT;
+            ctx.fillRect(-3, -canvas.height, 6, canvas.height);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = C_WHITE;
+            ctx.fillRect(-1, -canvas.height, 2, canvas.height);
+            ctx.restore();
+        });
+    }
+
+    // Player
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(state.playerAngle);
+    ctx.shadowBlur = 25; ctx.shadowColor = C_WHITE;
+    ctx.fillStyle = C_WHITE;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(24, 24); ctx.lineTo(10, 24); ctx.lineTo(0, 36); ctx.closePath();
+    ctx.fill();
+    // Hitbox dot
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = C_ACCENT;
+    ctx.beginPath(); ctx.arc(0, 10, player.colR, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Items
+    items.forEach(item => {
+        ctx.fillStyle = item.color;
+        ctx.font = 'bold 16px Source Code Pro';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 15; ctx.shadowColor = item.color;
+        ctx.fillText(item.label, item.x, item.y);
+    });
+
+    // Bullets (Default / Missile)
+    bullets.forEach(b => {
+        ctx.shadowBlur = 15; ctx.shadowColor = b.color;
+        ctx.fillStyle = b.color;
+        
+        if (b.type === 'MISSILE') {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(b.angle + Math.PI/2);
+            ctx.beginPath();
+            ctx.moveTo(0, -10); ctx.lineTo(6, 10); ctx.lineTo(-6, 10); ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        } else {
+            ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+        }
+    });
+
+    // Explosions
+    explosions.forEach(exp => {
+        ctx.beginPath();
+        ctx.arc(exp.x, exp.y, exp.r, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255, 170, 0, ${exp.life * 0.4})`; // Orange transparent
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255, 0, 85, ${exp.life})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    });
+
+    // Enemies
+    enemies.forEach(e => {
+        const isB = e.type === 'BOSS';
+        
+        if (isB && e.width) {
+            ctx.strokeStyle = "rgba(255, 0, 85, 0.5)";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(e.x - e.width/2, e.y - e.height + 4, e.width, e.height);
+        }
+
+        let textColor = isB ? C_DANGER : C_WHITE;
+        if (e.isMoving) {
+            textColor = (Date.now() % 400 < 200) ? C_DANGER : C_WHITE; // Flashing effect
+        }
+
+        ctx.fillStyle = textColor;
+        ctx.font = isB ? 'bold 22px Source Code Pro' : 'bold 15px Source Code Pro';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = isB ? 20 : 10; ctx.shadowColor = textColor;
+        ctx.fillText(e.text, e.x, e.y);
+        
+        ctx.shadowBlur = 0;
+        const bw = isB ? e.width : 65; 
+        ctx.fillStyle = "rgba(255,255,255,0.05)";
+        ctx.fillRect(e.x - bw/2, e.y + 12, bw, 3);
+        ctx.fillStyle = isB ? C_DANGER : C_WHITE;
+        ctx.fillRect(e.x - bw/2, e.y + 12, bw * (e.hp/e.maxHp), 3);
+    });
+
+    // Enemy Bullets
+    enemyBullets.forEach(eb => {
+        ctx.fillStyle = eb.type === 'red' ? C_DANGER : C_WHITE;
+        ctx.shadowBlur = 12; ctx.shadowColor = ctx.fillStyle;
+        ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.r, 0, Math.PI*2); ctx.fill();
+    });
+
+    // Particles
+    ctx.shadowBlur = 0;
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, 3, 3);
+    });
+
+    ctx.restore();
+}
+
+function loop(t) {
+    const dt = t - (loop.last || t);
+    loop.last = t;
+    update(dt);
+    draw();
+    if(state.running) requestAnimationFrame(loop);
+}
+
+function togglePause() {
+    state.paused = !state.paused;
+    document.getElementById("devPanel").style.display = state.paused ? "block" : "none";
+    document.getElementById("pause-overlay").style.display = state.paused ? "block" : "none";
+}
+
+function applySettings() {
+    // General
+    config.spawnInterval = parseInt(document.getElementById("spawnRate").value);
+    config.enemyBulletSpeed = parseFloat(document.getElementById("enemySpeed").value);
+    config.phaseDuration = parseInt(document.getElementById("phaseDur").value);
+    config.energyRegen = parseFloat(document.getElementById("energyRegen").value);
+    player.colR = parseInt(document.getElementById("hitboxRad").value);
+    
+    // Weapons Config
+    weaponStats.DEFAULT.damage = parseFloat(document.getElementById("defDmg").value);
+    weaponStats.DEFAULT.energy = parseFloat(document.getElementById("defEnrg").value);
+    weaponStats.DEFAULT.fireRate = parseInt(document.getElementById("defRate").value);
+
+    weaponStats.MISSILE.damage = parseFloat(document.getElementById("misDmg").value);
+    weaponStats.MISSILE.energy = parseFloat(document.getElementById("misEnrg").value);
+    weaponStats.MISSILE.fireRate = parseInt(document.getElementById("misRate").value);
+
+    weaponStats.LASER.damage = parseFloat(document.getElementById("lasDmg").value);
+    weaponStats.LASER.energy = parseFloat(document.getElementById("lasEnrg").value);
+    
+    togglePause();
+}
+
+function gameOver() {
+    state.running = false;
+    document.getElementById("final-phase").innerText = state.phase;
+    document.getElementById("game-over").style.display = "flex";
+}
+
+function resetGame() { location.reload(); }
+
+window.onload = startLoading;
+</script>
+</body>
+</html>
